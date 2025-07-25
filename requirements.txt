@@ -1,0 +1,10 @@
+# Core dependencies for the UDP Order Book Engine
+# No external dependencies required - uses only Python standard library
+
+# Web Dashboard dependencies
+flask>=2.0.0
+flask-socketio>=5.0.0
+
+# Optional dependencies for extensions (uncomment if needed):
+# redis>=4.0.0
+# kafka-python>=2.0.0 

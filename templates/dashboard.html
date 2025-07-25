@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HFT Order Book Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .stat-unit {
+            font-size: 0.9rem;
+            color: #666;
+            margin-left: 5px;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .order-book-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .order-book-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5rem;
+        }
+
+        .order-book {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .order-side {
+            border-radius: 10px;
+            padding: 15px;
+        }
+
+        .buy-side {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+
+        .sell-side {
+            background: linear-gradient(135deg, #f44336, #da190b);
+            color: white;
+        }
+
+        .order-side h3 {
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 1.2rem;
+        }
+
+        .order-level {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .order-level:last-child {
+            border-bottom: none;
+        }
+
+        .order-form {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .order-form h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .trades-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.2);
+            grid-column: 1 / -1;
+        }
+
+        .trades-section h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5rem;
+        }
+
+        .trades-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .trade-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+        }
+
+        .trade-item.buy {
+            border-left-color: #28a745;
+        }
+
+        .trade-item.sell {
+            border-left-color: #dc3545;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 10px;
+        }
+
+        .status-connected {
+            background: #28a745;
+        }
+
+        .status-disconnected {
+            background: #dc3545;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .order-book {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 HFT Order Book Dashboard</h1>
+            <p>Real-time trading system with UDP-based order processing</p>
+            <div>
+                <span class="status-indicator" id="connectionStatus"></span>
+                <span id="connectionText">Connecting...</span>
+            </div>
+        </div>
+
+        <div class="alert" id="alertBox"></div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Current Throughput</h3>
+                <div class="stat-value" id="currentThroughput">0</div>
+                <span class="stat-unit">orders/sec</span>
+            </div>
+            <div class="stat-card">
+                <h3>Peak Throughput</h3>
+                <div class="stat-value" id="peakThroughput">0</div>
+                <span class="stat-unit">orders/sec</span>
+            </div>
+            <div class="stat-card">
+                <h3>Total Orders</h3>
+                <div class="stat-value" id="totalOrders">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Trades</h3>
+                <div class="stat-value" id="totalTrades">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Total Volume</h3>
+                <div class="stat-value" id="totalVolume">0</div>
+            </div>
+            <div class="stat-card">
+                <h3>Uptime</h3>
+                <div class="stat-value" id="uptime">0</div>
+                <span class="stat-unit">seconds</span>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="order-book-section">
+                <h2>📊 Live Order Book</h2>
+                <div class="order-book" id="orderBook">
+                    <div class="order-side sell-side">
+                        <h3>SELL ORDERS</h3>
+                        <div id="sellOrders">No sell orders</div>
+                    </div>
+                    <div class="order-side buy-side">
+                        <h3>BUY ORDERS</h3>
+                        <div id="buyOrders">No buy orders</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="order-form">
+                <h2>📝 Submit Order</h2>
+                <form id="orderForm">
+                    <div class="form-group">
+                        <label for="clientId">Client ID</label>
+                        <input type="text" id="clientId" value="web_client" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="symbol">Symbol</label>
+                        <input type="text" id="symbol" value="AAPL" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="side">Side</label>
+                        <select id="side" required>
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="orderType">Order Type</label>
+                        <select id="orderType" required>
+                            <option value="LIMIT">LIMIT</option>
+                            <option value="MARKET">MARKET</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" id="quantity" value="100" min="1" required>
+                    </div>
+                    <div class="form-group" id="priceGroup">
+                        <label for="price">Price</label>
+                        <input type="number" id="price" value="150.00" step="0.01" min="0">
+                    </div>
+                    <button type="submit" class="btn">Submit Order</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="trades-section">
+            <h2>💰 Recent Trades</h2>
+            <div class="trades-list" id="tradesList">
+                <div style="text-align: center; color: #666; padding: 20px;">
+                    No trades yet. Submit some orders to see trades!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO
+        const socket = io();
+        let currentSymbol = 'AAPL';
+
+        // Connection status
+        socket.on('connect', function() {
+            document.getElementById('connectionStatus').className = 'status-indicator status-connected';
+            document.getElementById('connectionText').textContent = 'Connected';
+            showAlert('Connected to HFT Order Book Dashboard', 'success');
+        });
+
+        socket.on('disconnect', function() {
+            document.getElementById('connectionStatus').className = 'status-indicator status-disconnected';
+            document.getElementById('connectionText').textContent = 'Disconnected';
+            showAlert('Disconnected from server', 'error');
+        });
+
+        // Handle statistics updates
+        socket.on('statistics_update', function(data) {
+            updateStatistics(data);
+        });
+
+        // Handle order book updates
+        socket.on('orderbook_update', function(data) {
+            updateOrderBook(data);
+        });
+
+        // Handle order updates
+        socket.on('order_update', function(data) {
+            if (data.trades && data.trades.length > 0) {
+                addTrades(data.trades);
+            }
+            showAlert(`Order ${data.success ? 'accepted' : 'rejected'}: ${data.message}`, data.success ? 'success' : 'error');
+        });
+
+        // Update statistics display
+        function updateStatistics(data) {
+            document.getElementById('currentThroughput').textContent = data.current_throughput.toFixed(2);
+            document.getElementById('peakThroughput').textContent = data.peak_throughput.toFixed(2);
+            document.getElementById('totalOrders').textContent = data.total_orders_processed.toLocaleString();
+            document.getElementById('totalTrades').textContent = data.total_trades.toLocaleString();
+            document.getElementById('totalVolume').textContent = data.total_volume.toLocaleString();
+            document.getElementById('uptime').textContent = Math.floor(data.uptime_seconds);
+        }
+
+        // Update order book display
+        function updateOrderBook(data) {
+            if (data[currentSymbol]) {
+                const orderBook = data[currentSymbol];
+                
+                // Update sell orders
+                const sellOrdersDiv = document.getElementById('sellOrders');
+                if (orderBook.sell_levels && orderBook.sell_levels.length > 0) {
+                    sellOrdersDiv.innerHTML = orderBook.sell_levels.slice(0, 10).map(level => 
+                        `<div class="order-level">
+                            <span>$${level.price.toFixed(2)}</span>
+                            <span>${level.quantity}</span>
+                        </div>`
+                    ).join('');
+                } else {
+                    sellOrdersDiv.innerHTML = 'No sell orders';
+                }
+
+                // Update buy orders
+                const buyOrdersDiv = document.getElementById('buyOrders');
+                if (orderBook.buy_levels && orderBook.buy_levels.length > 0) {
+                    buyOrdersDiv.innerHTML = orderBook.buy_levels.slice(0, 10).map(level => 
+                        `<div class="order-level">
+                            <span>$${level.price.toFixed(2)}</span>
+                            <span>${level.quantity}</span>
+                        </div>`
+                    ).join('');
+                } else {
+                    buyOrdersDiv.innerHTML = 'No buy orders';
+                }
+            }
+        }
+
+        // Add trades to the list
+        function addTrades(trades) {
+            const tradesList = document.getElementById('tradesList');
+            
+            // Clear "no trades" message if present
+            if (tradesList.children.length === 1 && tradesList.children[0].style.textAlign === 'center') {
+                tradesList.innerHTML = '';
+            }
+
+            trades.forEach(trade => {
+                const tradeItem = document.createElement('div');
+                tradeItem.className = 'trade-item';
+                tradeItem.innerHTML = `
+                    <div>
+                        <strong>${trade.quantity}</strong> shares @ <strong>$${trade.price.toFixed(2)}</strong>
+                    </div>
+                    <div>
+                        ${new Date(trade.timestamp * 1000).toLocaleTimeString()}
+                    </div>
+                `;
+                tradesList.insertBefore(tradeItem, tradesList.firstChild);
+
+                // Keep only last 20 trades
+                if (tradesList.children.length > 20) {
+                    tradesList.removeChild(tradesList.lastChild);
+                }
+            });
+        }
+
+        // Show alert messages
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alertBox');
+            alertBox.textContent = message;
+            alertBox.className = `alert alert-${type}`;
+            alertBox.style.display = 'block';
+            
+            setTimeout(() => {
+                alertBox.style.display = 'none';
+            }, 3000);
+        }
+
+        // Handle order form submission
+        document.getElementById('orderForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const orderData = {
+                client_id: document.getElementById('clientId').value,
+                symbol: document.getElementById('symbol').value,
+                side: document.getElementById('side').value,
+                order_type: document.getElementById('orderType').value,
+                quantity: parseInt(document.getElementById('quantity').value)
+            };
+
+            if (orderData.order_type === 'LIMIT') {
+                orderData.price = parseFloat(document.getElementById('price').value);
+            }
+
+            // Submit order via REST API
+            fetch('/api/orders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(orderData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    showAlert(`Order submitted successfully! Order ID: ${data.order_id}`, 'success');
+                } else {
+                    showAlert(`Order failed: ${data.error}`, 'error');
+                }
+            })
+            .catch(error => {
+                showAlert(`Error submitting order: ${error}`, 'error');
+            });
+        });
+
+        // Handle order type change
+        document.getElementById('orderType').addEventListener('change', function(e) {
+            const priceGroup = document.getElementById('priceGroup');
+            if (e.target.value === 'MARKET') {
+                priceGroup.style.display = 'none';
+            } else {
+                priceGroup.style.display = 'block';
+            }
+        });
+
+        // Handle symbol change
+        document.getElementById('symbol').addEventListener('change', function(e) {
+            currentSymbol = e.target.value;
+        });
+
+        // Request initial data
+        socket.emit('request_statistics');
+        socket.emit('request_orderbook');
+    </script>
+</body>
+</html> 
